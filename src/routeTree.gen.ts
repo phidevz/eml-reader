@@ -8,44 +8,105 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root"
-import { Route as IndexRouteImport } from "./routes/index"
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as ViewPathRouteImport } from './routes/view.$path'
+import { Route as ApiPathIndexRouteImport } from './routes/api.$path/index'
+import { Route as ApiPathAttachmentsAttachmentRouteImport } from './routes/api.$path/attachments.$attachment'
 
 const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ViewPathRoute = ViewPathRouteImport.update({
+  id: '/view/$path',
+  path: '/view/$path',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPathIndexRoute = ApiPathIndexRouteImport.update({
+  id: '/api/$path/',
+  path: '/api/$path/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPathAttachmentsAttachmentRoute =
+  ApiPathAttachmentsAttachmentRouteImport.update({
+    id: '/api/$path/attachments/$attachment',
+    path: '/api/$path/attachments/$attachment',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute
+  '/': typeof IndexRoute
+  '/view/$path': typeof ViewPathRoute
+  '/api/$path/': typeof ApiPathIndexRoute
+  '/api/$path/attachments/$attachment': typeof ApiPathAttachmentsAttachmentRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute
+  '/': typeof IndexRoute
+  '/view/$path': typeof ViewPathRoute
+  '/api/$path': typeof ApiPathIndexRoute
+  '/api/$path/attachments/$attachment': typeof ApiPathAttachmentsAttachmentRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  "/": typeof IndexRoute
+  '/': typeof IndexRoute
+  '/view/$path': typeof ViewPathRoute
+  '/api/$path/': typeof ApiPathIndexRoute
+  '/api/$path/attachments/$attachment': typeof ApiPathAttachmentsAttachmentRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: "/"
+  fullPaths:
+    | '/'
+    | '/view/$path'
+    | '/api/$path/'
+    | '/api/$path/attachments/$attachment'
   fileRoutesByTo: FileRoutesByTo
-  to: "/"
-  id: "__root__" | "/"
+  to: '/' | '/view/$path' | '/api/$path' | '/api/$path/attachments/$attachment'
+  id:
+    | '__root__'
+    | '/'
+    | '/view/$path'
+    | '/api/$path/'
+    | '/api/$path/attachments/$attachment'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ViewPathRoute: typeof ViewPathRoute
+  ApiPathIndexRoute: typeof ApiPathIndexRoute
+  ApiPathAttachmentsAttachmentRoute: typeof ApiPathAttachmentsAttachmentRoute
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/": {
-      id: "/"
-      path: "/"
-      fullPath: "/"
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/view/$path': {
+      id: '/view/$path'
+      path: '/view/$path'
+      fullPath: '/view/$path'
+      preLoaderRoute: typeof ViewPathRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/$path/': {
+      id: '/api/$path/'
+      path: '/api/$path'
+      fullPath: '/api/$path/'
+      preLoaderRoute: typeof ApiPathIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/$path/attachments/$attachment': {
+      id: '/api/$path/attachments/$attachment'
+      path: '/api/$path/attachments/$attachment'
+      fullPath: '/api/$path/attachments/$attachment'
+      preLoaderRoute: typeof ApiPathAttachmentsAttachmentRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -53,14 +114,17 @@ declare module "@tanstack/react-router" {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ViewPathRoute: ViewPathRoute,
+  ApiPathIndexRoute: ApiPathIndexRoute,
+  ApiPathAttachmentsAttachmentRoute: ApiPathAttachmentsAttachmentRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
 
-import type { getRouter } from "./router.tsx"
-import type { createStart } from "@tanstack/react-start"
-declare module "@tanstack/react-start" {
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
