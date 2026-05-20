@@ -1,61 +1,126 @@
-import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
+import {createMiddleware, createServerFn} from "@tanstack/react-start";
+import {z} from "zod";
 import {
-  getFileTree as getFileTreeImpl,
-  readEmail,
-  toAttachmentMeta,
+    getFileTree as getFileTreeImpl,
+    readEmail,
+    toAttachmentMeta,
 } from "@/lib/mailfs.server.ts";
+import {getOptions} from "@/lib/options.server.ts";
+
+export type AppContext = {
+    isSignedIn: false
+    currentUser: string
+} | {
+    isSignedIn: true
+    currentUser: string
+}
+
+export class PathNotFoundError extends Error {
+    constructor() {
+        super("Mail or file path does not exist");
+    }
+}
+
+export type Username = AppContext["currentUser"];
+
+export const CatchAllUser = "*" as const;
+
+export const userMiddleware = createMiddleware()
+    .server(({next, request}) => {
+        const {userSpecificFolders, usernameHeader, _iReallyWantToEmulateTheFollowingUser} = getOptions();
+
+        if (!userSpecificFolders) {
+            return next({
+                context: {
+                    isSignedIn: false,
+                    currentUser: CatchAllUser
+                } as AppContext
+            });
+        }
+
+        if (!!_iReallyWantToEmulateTheFollowingUser) {
+            return next({
+                context: {
+                    isSignedIn: true,
+                    currentUser: _iReallyWantToEmulateTheFollowingUser!,
+                } as AppContext
+            });
+        }
+
+        const usernameValue = request.headers.get(usernameHeader!)?.trim();
+        if (!usernameValue) {
+            throw new Error("Username header missing")
+        }
+        if (usernameValue === CatchAllUser) {
+            throw new Error("Catch-all username is not allowed")
+        }
+
+        return next({
+            context: {
+                isSignedIn: true,
+                currentUser: usernameValue!,
+            } as AppContext
+        });
+    })
+
+export const getCurrentUser = createServerFn({method: "GET"})
+    .middleware([userMiddleware])
+    .handler(async ({context}) => {
+        return context.currentUser;
+    })
 
 export const GetFileTreeSchema = z
-  .object({
-    forceRefresh: z.boolean().optional().default(false),
-  })
-  .optional();
+    .object({
+        forceRefresh: z.boolean().optional().default(false),
+    })
+    .optional();
 
 export type GetFileTreeOptions = z.infer<typeof GetFileTreeSchema>;
 
-export const getFileTree = createServerFn({ method: "GET" })
-  .inputValidator(GetFileTreeSchema)
-  .handler(async ({ data }) => {
-    return await getFileTreeImpl(data);
-  });
+export const getFileTree = createServerFn({method: "GET"})
+    .middleware([userMiddleware])
+    .inputValidator(GetFileTreeSchema)
+    .handler(async ({context, data}) => {
+        return await getFileTreeImpl(context.currentUser, data);
+    });
 
 export const GetEmailSchema = z.object({
-  path: z.string().nonempty(),
+    path: z.string().nonempty(),
 });
 
-export const getEmail = createServerFn({ method: "GET" })
-  .inputValidator(GetEmailSchema)
-  .handler(async ({ data: { path: relativePath } }) => {
-    const email = await readEmail(relativePath);
+export const getEmail = createServerFn({method: "GET"})
+    .middleware([userMiddleware])
+    .inputValidator(GetEmailSchema)
+    .handler(async ({context, data: {path: relativePath}}) => {
+        const email = await readEmail(context.currentUser, relativePath);
 
-    return {
-      pathOnDisk: relativePath,
-      headers: Object.fromEntries(email.headers.entries()),
-      subject: email.subject,
-      from: email.from?.name,
-      to: email.to?.at(0)?.name,
-      date: !!email.date ? new Date(email.date) : undefined,
-      text: email.text,
-      html: email.html || undefined,
-      attachments: (email.attachments || []).map(toAttachmentMeta),
-    };
-  });
+        return {
+            pathOnDisk: relativePath,
+            headers: Object.fromEntries(email.headers.entries()),
+            subject: email.subject,
+            from: email.from?.name,
+            to: email.to?.at(0)?.name,
+            date: !!email.date ? new Date(email.date) : undefined,
+            text: email.text,
+            html: email.html || undefined,
+            attachments: (email.attachments || []).map(toAttachmentMeta),
+        };
+    });
 
 export interface ParsedEmail {
-  pathOnDisk: string;
-  headers: Record<string, any>;
-  subject?: string;
-  from?: string;
-  to?: string;
-  date?: Date;
-  text?: string;
-  html?: string;
-  attachments: Array<{
-    filename?: string;
-    cid?: string;
-    contentType?: string;
-    size: number;
-    contentDisposition?: string;
-  }>;
+    pathOnDisk: string;
+    headers: Record<string, any>;
+    subject?: string;
+    from?: string;
+    to?: string;
+    date?: Date;
+    text?: string;
+    html?: string;
+    attachments: Array<{
+        filename?: string;
+        cid?: string;
+        contentType?: string;
+        size: number;
+        contentDisposition?: string;
+    }>;
 }

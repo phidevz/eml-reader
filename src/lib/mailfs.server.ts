@@ -2,125 +2,146 @@ import "@tanstack/react-start/server-only";
 
 import fs from "fs/promises";
 import path from "path";
-import type { GetFileTreeOptions } from "@/lib/api.ts";
-import { getOptions } from "@/lib/options.server.ts";
-import { createServerOnlyFn } from "@tanstack/react-start";
-import Parser, { type Attachment } from "postal-mime";
+import {CatchAllUser, type GetFileTreeOptions, PathNotFoundError, type Username} from "@/lib/api.ts";
+import {getOptions} from "@/lib/options.server.ts";
+import {createServerOnlyFn} from "@tanstack/react-start";
+import Parser, {type Attachment} from "postal-mime";
+import type {Dirent} from "node:fs";
 
 interface CacheEntry {
-  data: FileTreeNode[];
-  timestamp: number;
+    data: FileTreeNode[];
+    timestamp: number;
 }
 
-let fileTreeCache: CacheEntry | null = null;
+let fileTreeCache = new Map<Username, CacheEntry>();
 
-export async function getFileTree(
-  options?: GetFileTreeOptions,
-): Promise<FileTreeNode[]> {
-  const { ttlSeconds, mailRoot } = getOptions();
-  const now = Date.now();
+export async function getFileTree(username: Username, options ?: GetFileTreeOptions): Promise<FileTreeNode[]> {
+    const {ttlSeconds, mailRoot} = getOptions();
+    const now = Date.now();
 
-  if (
-    fileTreeCache &&
-    !options?.forceRefresh &&
-    now - fileTreeCache.timestamp < ttlSeconds
-  ) {
-    console.debug("[Cache] Returning cached file tree");
-    return fileTreeCache.data;
-  }
+    const cachedEntry = fileTreeCache.get(username);
 
-  console.debug("[Cache] Building fresh file tree");
-  const data = await buildFileTree(mailRoot, mailRoot);
+    if (
+        cachedEntry &&
+        !options?.forceRefresh &&
+        now - cachedEntry.timestamp < ttlSeconds
+    ) {
+        console.debug(`[Cache] Returning cached file tree (user=${username})`);
 
-  // Update cache
-  fileTreeCache = {
-    data,
-    timestamp: now,
-  };
+        return cachedEntry.data;
+    }
 
-  return data;
+    console.debug(`[Cache] Building fresh file tree (user=${username})`);
+    let userSpecificMailRoot = mailRoot;
+    if (username !== CatchAllUser) {
+        userSpecificMailRoot = path.join(userSpecificMailRoot, username);
+    }
+
+    const data = await buildFileTree(userSpecificMailRoot, userSpecificMailRoot);
+
+    fileTreeCache.set(username, {
+        data,
+        timestamp: now,
+    });
+
+    return data;
 }
 
 export interface FileTreeNode {
-  name: string;
-  path: string;
-  isFile: boolean;
-  children?: FileTreeNode[];
+    name: string;
+    path: string;
+    isFile: boolean;
+    children?: FileTreeNode[];
 }
 
 export async function buildFileTree(
-  MAIL_ROOT: string,
-  dirPath: string,
+    MAIL_ROOT: string,
+    dirPath: string,
 ): Promise<FileTreeNode[]> {
-  try {
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
-    const nodes: FileTreeNode[] = [];
-
-    for (const entry of entries) {
-      const fullPath = path.join(dirPath, entry.name);
-      const relativePath = path
-        .relative(MAIL_ROOT, fullPath)
-        .replaceAll("\\", "/");
-
-      if (entry.isDirectory()) {
-        const children = await buildFileTree(MAIL_ROOT, fullPath);
-        if (children.length > 0) {
-          nodes.push({
-            name: entry.name,
-            path: relativePath + "/",
-            isFile: false,
-            children,
-          });
-        }
-      } else if (entry.isFile() && entry.name.toLowerCase().endsWith(".eml")) {
-        nodes.push({
-          name: entry.name,
-          path: relativePath,
-          isFile: true,
-        });
-      }
+    let entries: Dirent[];
+    try {
+        entries = await fs.readdir(dirPath, {withFileTypes: true});
+    } catch (error) {
+        console.log(`Directory does not exist: ${dirPath}`)
+        return [];
     }
 
-    return nodes.sort((a, b) => {
-      if (a.isFile !== b.isFile) {
-        return a.isFile ? 1 : -1;
-      }
-      return a.name.localeCompare(b.name);
-    });
-  } catch (error) {
-    console.error(`Failed to scan directory ${dirPath}:`, error);
-    return [];
-  }
+    try {
+        const nodes: FileTreeNode[] = [];
+
+        for (const entry of entries) {
+            const fullPath = path.join(dirPath, entry.name);
+            const relativePath = path
+                .relative(MAIL_ROOT, fullPath)
+                .replaceAll("\\", "/");
+
+            if (entry.isDirectory()) {
+                const children = await buildFileTree(MAIL_ROOT, fullPath);
+                if (children.length > 0) {
+                    nodes.push({
+                        name: entry.name,
+                        path: relativePath + "/",
+                        isFile: false,
+                        children,
+                    });
+                }
+            } else if (entry.isFile() && entry.name.toLowerCase().endsWith(".eml")) {
+                nodes.push({
+                    name: entry.name,
+                    path: relativePath,
+                    isFile: true,
+                });
+            }
+        }
+
+        return nodes.sort((a, b) => {
+            if (a.isFile !== b.isFile) {
+                return a.isFile ? 1 : -1;
+            }
+            return a.name.localeCompare(b.name);
+        });
+    } catch (error) {
+        console.error(`Failed to scan directory ${dirPath}:`, error);
+        return [];
+    }
 }
 
-export async function readEmlFile(relativePath: string): Promise<string> {
-  const { mailRoot: MAIL_ROOT } = getOptions();
-  const fullPath = path.join(MAIL_ROOT, relativePath);
+export async function readEmlFile(username: Username, relativePath: string): Promise<string> {
+    const {mailRoot: MAIL_ROOT} = getOptions();
+    let userSpecificMailRoot = MAIL_ROOT;
+    if (username !== CatchAllUser) {
+        userSpecificMailRoot = path.join(userSpecificMailRoot, username);
+    }
+    const fullPath = path.join(userSpecificMailRoot, relativePath);
 
-  // Prevent directory traversal attacks
-  const resolved = path.resolve(fullPath);
-  const mailRoot = path.resolve(MAIL_ROOT);
-  if (!resolved.startsWith(mailRoot)) {
-    throw new Error("Invalid file path");
-  }
+    // Prevent directory traversal attacks
+    const resolved = path.resolve(fullPath);
+    const mailRoot = path.resolve(userSpecificMailRoot);
+    if (!resolved.startsWith(mailRoot)) {
+        throw new PathNotFoundError();
+    }
+    const fileExists = await fs.access(fullPath).then(() => true).catch(() => false);
+    if (!fileExists) {
+        throw new PathNotFoundError();
+    }
 
-  return await fs.readFile(fullPath, "utf-8");
+    return await fs.readFile(fullPath, "utf-8");
 }
 
-export const readEmail = createServerOnlyFn(async (relativePath: string) => {
-  const fileContent = await readEmlFile(relativePath);
-  return await new Parser().parse(fileContent);
+export const readEmail = createServerOnlyFn(async (username: Username, relativePath: string) => {
+    const fileContent = await readEmlFile(username, relativePath);
+    return await new Parser().parse(fileContent);
 });
 
 export const toAttachmentMeta = createServerOnlyFn((att: Attachment) => {
-  return {
-    filename: att.filename ?? undefined,
-    cid: att.contentId,
-    contentType: att.mimeType,
-    size:
-      typeof att.content === "string"
-        ? att.content.length
-        : att.content.byteLength,
-    contentDisposition: att.disposition ?? undefined,
-  };
+    return {
+        filename: att.filename ?? undefined,
+        cid: att.contentId,
+        contentType: att.mimeType,
+        size:
+            typeof att.content === "string"
+                ? att.content.length
+                : att.content.byteLength,
+        contentDisposition: att.disposition ?? undefined,
+    };
 });
