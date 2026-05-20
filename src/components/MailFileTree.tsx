@@ -38,7 +38,7 @@ export function MailFileTree() {
   const query = useFileTree();
 
   const transformedData = useMemo(() => {
-    if (!query.data) {
+    if (!query.data?.data) {
       return [];
     }
 
@@ -46,7 +46,7 @@ export function MailFileTree() {
       isFile: false,
       path: "/",
       name: "/",
-      children: query.data,
+      children: query.data.data,
     });
   }, [query.data]);
 

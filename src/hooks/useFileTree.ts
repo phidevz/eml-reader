@@ -11,8 +11,6 @@ export const getQueryKey = () => queryKey;
 export const useFileTree = () => {
   const loaderData = RootRoute.useLoaderData();
 
-  console.log("X", loaderData)
-
   return useQuery({
     queryKey: getQueryKey(),
     networkMode: "online",

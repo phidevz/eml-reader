@@ -19,5 +19,6 @@ export const useMail = () => {
     initialData: loaderData,
     staleTime: 1000 * 60 * 5, // Consider data stale after 5 minutes
     gcTime: 1000 * 60 * 60, // Keep in cache for 60 minutes
+    enabled: !mailPath.endsWith("/"),
   });
 };

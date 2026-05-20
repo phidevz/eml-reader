@@ -15,20 +15,20 @@ interface CacheEntry {
 
 let fileTreeCache = new Map<Username, CacheEntry>();
 
-export async function getFileTree(username: Username, options ?: GetFileTreeOptions): Promise<FileTreeNode[]> {
+export async function getFileTree(username: Username, options ?: GetFileTreeOptions): Promise<CacheEntry> {
     const {ttlSeconds, mailRoot} = getOptions();
     const now = Date.now();
 
-    const cachedEntry = fileTreeCache.get(username);
+    let cachedEntry = fileTreeCache.get(username);
 
     if (
-        cachedEntry &&
+        !!cachedEntry &&
         !options?.forceRefresh &&
         now - cachedEntry.timestamp < ttlSeconds
     ) {
         console.debug(`[Cache] Returning cached file tree (user=${username})`);
 
-        return cachedEntry.data;
+        return cachedEntry;
     }
 
     console.debug(`[Cache] Building fresh file tree (user=${username})`);
@@ -38,13 +38,14 @@ export async function getFileTree(username: Username, options ?: GetFileTreeOpti
     }
 
     const data = await buildFileTree(userSpecificMailRoot, userSpecificMailRoot);
-
-    fileTreeCache.set(username, {
+    cachedEntry = {
         data,
         timestamp: now,
-    });
+    }
 
-    return data;
+    fileTreeCache.set(username, cachedEntry);
+
+    return cachedEntry;
 }
 
 export interface FileTreeNode {
