@@ -1,10 +1,11 @@
 import {createFileRoute} from "@tanstack/react-router";
 import {readEmlFile} from "@/lib/mailfs.server.ts";
 import {userMiddleware} from "@/lib/api.ts";
+import {createCsrfMiddleware} from "@tanstack/react-start";
 
 export const Route = createFileRoute("/api/$path/")({
     server: {
-        middleware: [userMiddleware],
+        middleware: [createCsrfMiddleware(), userMiddleware],
         handlers: {
             GET: async ({context, params: {path}}) => {
                 const content = await readEmlFile(context.currentUser, path);

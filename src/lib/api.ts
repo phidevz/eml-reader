@@ -21,13 +21,24 @@ export class PathNotFoundError extends Error {
     }
 }
 
+export class AuthError extends Error {
+    constructor() {
+        super("Unauthorized");
+    }
+}
+
 export type Username = AppContext["currentUser"];
 
 export const CatchAllUser = "*" as const;
 
 export const userMiddleware = createMiddleware()
     .server(({next, request}) => {
-        const {userSpecificFolders, usernameHeader, _iReallyWantToEmulateTheFollowingUser} = getOptions();
+        const {
+            userSpecificFolders,
+            usernameHeader,
+            _iReallyWantToEmulateTheFollowingUser,
+            proxySharedSecret
+        } = getOptions();
 
         if (!userSpecificFolders) {
             return next({
@@ -47,12 +58,19 @@ export const userMiddleware = createMiddleware()
             });
         }
 
+        if (!!proxySharedSecret && request.headers.get("Shared-Secret")?.trim() != proxySharedSecret) {
+            console.error("Shared secret missing or wrong")
+            throw new AuthError();
+        }
+
         const usernameValue = request.headers.get(usernameHeader!)?.trim();
         if (!usernameValue) {
-            throw new Error("Username header missing")
+            console.error("Username header missing")
+            throw new AuthError();
         }
         if (usernameValue === CatchAllUser) {
-            throw new Error("Catch-all username is not allowed")
+            console.error("Catch-all username is not allowed")
+            throw new AuthError();
         }
 
         return next({

@@ -1,10 +1,11 @@
 import {createFileRoute} from "@tanstack/react-router";
 import {readEmail, toAttachmentMeta} from "@/lib/mailfs.server.ts";
 import {userMiddleware} from "@/lib/api.ts";
+import {createCsrfMiddleware} from "@tanstack/react-start";
 
 export const Route = createFileRoute("/api/$path/attachments/$attachment")({
     server: {
-        middleware: [userMiddleware],
+        middleware: [createCsrfMiddleware(), userMiddleware],
         handlers: {
             GET: async ({context, params: {path, attachment: attachmentName}}) => {
                 const email = await readEmail(context.currentUser, path);

@@ -8,12 +8,17 @@ import {createServerOnlyFn} from "@tanstack/react-start";
 import Parser, {type Attachment} from "postal-mime";
 import type {Dirent} from "node:fs";
 
+declare global {
+    var __fileTreeCache: Map<Username, CacheEntry> | undefined;
+}
+
 interface CacheEntry {
     data: FileTreeNode[];
     timestamp: number;
 }
 
-let fileTreeCache = new Map<Username, CacheEntry>();
+globalThis.__fileTreeCache ??= new Map<Username, CacheEntry>();
+let fileTreeCache = globalThis.__fileTreeCache;
 
 export async function getFileTree(username: Username, options ?: GetFileTreeOptions): Promise<CacheEntry> {
     const {ttlSeconds, mailRoot} = getOptions();

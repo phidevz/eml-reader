@@ -5,13 +5,16 @@ import {z} from "zod";
  * if you specify userSpecificFolders, users need to be logged in: The username header
  * also then, file trees etc. are scoped to the current user (which will be "*" otherwise)
  * and you can emulate a user being set via EML__I_REALLY_WANT_TO_EMULATE_THE_FOLLOWING_USER (do not do this in PROD)
+ *
+ * You _SHOULD_ use EML_PROXY_SHARED_SECRET and supply the header Shared-Secret from the proxy
  */
 const envSchema = z.object({
     ttlSeconds: z.coerce.number().positive().int().optional().default(300),
     mailRoot: z.string().nonempty().optional().default("/var/mail"),
     userSpecificFolders: z.enum(["1", "0", "yes", "no", "true", "false"]).optional().transform(value => value === "1" || value === "yes" || value === "true").default(false),
     usernameHeader: z.string().trim().nonempty().optional(),
-    _iReallyWantToEmulateTheFollowingUser: z.string().nonempty().optional()
+    _iReallyWantToEmulateTheFollowingUser: z.string().nonempty().optional(),
+    proxySharedSecret: z.string().trim().min(20).optional(),
 }).refine(({
                userSpecificFolders,
                usernameHeader
@@ -35,7 +38,8 @@ export const getOptions = createServerOnlyFn(() => {
                 }),
             );
 
-            console.log("Validating ENV", envVariables, transformed);
+            // Leave this here for debugging purposes
+            // console.log("Validating ENV", envVariables, transformed);
 
             options = envSchema.parse(transformed);
         } catch (error) {
