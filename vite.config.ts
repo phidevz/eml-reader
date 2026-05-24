@@ -10,6 +10,7 @@ const config = defineConfig({
   plugins: [
     devtools(),
     nitro({
+      preset: 'bun',
       rollupConfig: {
         external: ['mailparser'],
       },

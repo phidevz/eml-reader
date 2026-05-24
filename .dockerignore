@@ -1,0 +1,8 @@
+.github/
+.idea/
+.tanstack/
+node_modules/
+test-mail-root/
+.dockerignore
+.gitignore
+README.md
